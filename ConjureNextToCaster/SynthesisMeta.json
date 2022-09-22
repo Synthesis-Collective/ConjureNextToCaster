@@ -1,0 +1,15 @@
+{
+    "Nickname": "Conjure Next To Caster",
+    "Visibility": "Visible",
+    "OneLineDescription": "Creates alternate versions of summoning spells that conjure next to the caster.",
+    "LongDescription": "Based on and requires the script from [Conjure Next To Caster REDUX](https://www.nexusmods.com/skyrimspecialedition/mods/28932)",
+    "PreferredAutoVersioning": "Default",
+    "RequiredMods": [],
+    "TargetedReleases": [
+        "SkyrimLE",
+        "SkyrimSE",
+        "SkyrimVR",
+        "EnderalLE",
+        "EnderalSE"
+    ]
+}
