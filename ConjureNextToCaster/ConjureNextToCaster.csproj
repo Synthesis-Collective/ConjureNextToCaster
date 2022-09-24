@@ -4,10 +4,11 @@
     <TargetFramework>net6.0</TargetFramework>
     <TargetPlatformIdentifier>Windows</TargetPlatformIdentifier>
     <ImplicitUsings>true</ImplicitUsings>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Mutagen.Bethesda.Skyrim" Version="0.39.4-pr002" />
+    <PackageReference Include="Mutagen.Bethesda.Skyrim" Version="0.39.4" />
     <PackageReference Include="Mutagen.Bethesda.Synthesis" Version="0.24" />
   </ItemGroup>
 </Project>

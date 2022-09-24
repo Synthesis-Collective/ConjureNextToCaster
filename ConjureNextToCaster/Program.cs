@@ -2,13 +2,27 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Archives;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
-using Noggog;
+using System.IO.Abstractions;
 
 namespace ConjureNextToCaster
 {
     public class Program
     {
         private static Lazy<Settings> Settings = null!;
+
+        internal static IFileSystem? _fileSystem = null;
+
+        private static IFileSystem FileSystem
+        {
+            get
+            {
+                _fileSystem ??= new FileSystem();
+                return _fileSystem;
+            }
+        }
+
+        private static IPath Path => FileSystem.Path;
+        private static IFile File => FileSystem.File;
 
         public static async Task<int> Main(string[] args)
         {
@@ -24,7 +38,7 @@ namespace ConjureNextToCaster
                 .Run(args);
         }
 
-        private static void RunnabilityCheck(IRunnabilityState state)
+        internal static void RunnabilityCheck(IRunnabilityState state)
         {
             switch (state.GameRelease)
             {
@@ -45,19 +59,19 @@ namespace ConjureNextToCaster
             }
         }
 
-        private static void MustHaveScript(string scriptName, GameRelease gameRelease, DirectoryPath dataFolderPath)
+        internal static void MustHaveScript(string scriptName, GameRelease gameRelease, string dataFolderPath)
         {
             var scriptPath = Path.Combine("Scripts", scriptName + ".pex");
+            var pathToFileOnDisk = Path.Combine(dataFolderPath, scriptPath);
 
-            var pathToFileOnDisk = dataFolderPath.GetFile(scriptPath);
-            if (pathToFileOnDisk.Exists) return;
+            if (File.Exists(pathToFileOnDisk)) return;
 
             foreach (var filePath in Archive.GetApplicableArchivePaths(gameRelease, dataFolderPath))
                 foreach (var archiveFile in Archive.CreateReader(gameRelease, filePath).Files)
                     if (archiveFile.Path.Equals(scriptPath, StringComparison.OrdinalIgnoreCase))
                         return;
 
-            throw new FileNotFoundException(message: null, fileName: pathToFileOnDisk.Path);
+            throw new FileNotFoundException(message: null, fileName: pathToFileOnDisk);
         }
 
         public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state) => new ConjureNextToCasterSkyrim(LoadOrder: state.LoadOrder, state.PatchMod, state.LinkCache, Settings).Run();

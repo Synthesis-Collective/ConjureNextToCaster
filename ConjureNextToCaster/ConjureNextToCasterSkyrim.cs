@@ -1,7 +1,9 @@
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Aspects;
 using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Order;
+using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Skyrim;
 using Noggog;
 
@@ -47,16 +49,14 @@ namespace ConjureNextToCaster
             }
         }
 
-        private void ProcessSummoningSpellBook(IBookGetter bookGetter, ISpellGetter aimedSpellGetter)
+        internal void ProcessSummoningSpellBook(IBookGetter bookGetter, ISpellGetter aimedSpellGetter)
         {
             Console.WriteLine("Processing summoning spell book " + bookGetter);
-
-            // bookGetter.EditorID?.Equals("SpellTomeConjureFrostAtronach");
 
             GetScriptObjectProperty(GetScriptEntry(patchMod.Books.GetOrAddAsOverride(bookGetter))).Object.SetTo(MakeSelfTargetedSpell(aimedSpellGetter, FindExistingSpell(bookGetter)));
         }
 
-        private ISpellGetter? FindExistingSpell(IBookGetter bookGetter)
+        internal ISpellGetter? FindExistingSpell(IBookGetter bookGetter)
         {
             if (bookGetter.VirtualMachineAdapter is null) return null;
 
@@ -83,7 +83,7 @@ namespace ConjureNextToCaster
             return null;
         }
 
-        private static ScriptEntry GetScriptEntry(Book book)
+        internal static ScriptEntry GetScriptEntry(Book book)
         {
             book.VirtualMachineAdapter ??= new();
 
@@ -101,7 +101,7 @@ namespace ConjureNextToCaster
             return scriptEntry;
         }
 
-        private static IScriptObjectProperty GetScriptObjectProperty(ScriptEntry scriptEntry)
+        internal static IScriptObjectProperty GetScriptObjectProperty(ScriptEntry scriptEntry)
         {
             foreach (var scriptProperty in scriptEntry.Properties)
                 if (scriptProperty.Name.Equals("SecondSpell") && scriptProperty is IScriptObjectProperty candidateScriptObjectProperty)
@@ -128,7 +128,7 @@ namespace ConjureNextToCaster
             Range = false,
         };
 
-        private ISpellGetter MakeSelfTargetedSpell(ISpellGetter aimedSpellGetter, ISpellGetter? foundSelfTargetedSpell)
+        internal ISpellGetter MakeSelfTargetedSpell(ISpellGetter aimedSpellGetter, ISpellGetter? foundSelfTargetedSpell)
         {
             if (aimedToSelfSpellGetter.TryGetValue(aimedSpellGetter, out var selfTargetedSpellGetter)) return selfTargetedSpellGetter;
 
@@ -136,15 +136,22 @@ namespace ConjureNextToCaster
                 ? patchMod.Spells.GetOrAddAsOverride(foundSelfTargetedSpell)
                 : patchMod.Spells.AddNew(aimedSpellGetter.EditorID + "_Self");
 
-            selfTargetedSpell.DeepCopyIn(aimedSpellGetter, out var errorMask2, copyMask: SpellCopyMask);
-            if (errorMask2.Overall is not null) throw errorMask2.Overall;
+            selfTargetedSpell.DeepCopyIn(aimedSpellGetter, copyMask: SpellCopyMask);
 
             selfTargetedSpell.Range = 0;
             selfTargetedSpell.TargetType = TargetType.Self;
 
-            if (aimedSpellGetter.Name?.String is not null)
-                (selfTargetedSpell.Name ??= new(aimedSpellGetter.Name.TargetLanguage)).String = settings.Value.SpellPrefix + aimedSpellGetter.Name.String + settings.Value.SpellSuffix;
+            EditName(aimedSpellGetter, selfTargetedSpell);
 
+            EditMagicEffects(selfTargetedSpell, foundSelfTargetedSpell);
+
+            aimedToSelfSpellGetter.Add(aimedSpellGetter, selfTargetedSpell);
+
+            return selfTargetedSpell;
+        }
+
+        internal void EditMagicEffects(ISpell selfTargetedSpell, ISpellGetter? foundSelfTargetedSpell)
+        {
             Dictionary<IFormLinkGetter<INpcGetter>, IMagicEffectGetter>? victimToMagicEffect = null;
 
             if (foundSelfTargetedSpell is not null)
@@ -156,7 +163,7 @@ namespace ConjureNextToCaster
                     if (!effect.BaseEffect.TryResolve(linkCache, out var aimedMagicEffect)) continue;
                     if (aimedMagicEffect.CastType != CastType.FireAndForget) continue;
                     if (aimedMagicEffect.Archetype is not IMagicEffectSummonCreatureArchetypeGetter foo) continue;
-                    
+
                     victimToMagicEffect.Add(foo.Association, aimedMagicEffect);
                 }
             }
@@ -175,10 +182,6 @@ namespace ConjureNextToCaster
                 else
                     effect.BaseEffect.SetTo(MakeSelfTargetedMagicEffect(aimedMagicEffect));
             }
-
-            aimedToSelfSpellGetter.Add(aimedSpellGetter, selfTargetedSpell);
-
-            return selfTargetedSpell;
         }
 
         private readonly Dictionary<IMagicEffectGetter, IMagicEffectGetter> aimedToSelfMagicEffectGetter = new();
@@ -191,7 +194,7 @@ namespace ConjureNextToCaster
             TargetType = false,
         };
 
-        private IMagicEffectGetter MakeSelfTargetedMagicEffect(IMagicEffectGetter aimedMagicEffectGetter, IMagicEffectGetter? foundSelfTargetedMagicEffect = null)
+        internal IMagicEffectGetter MakeSelfTargetedMagicEffect(IMagicEffectGetter aimedMagicEffectGetter, IMagicEffectGetter? foundSelfTargetedMagicEffect = null)
         {
             if (aimedToSelfMagicEffectGetter.TryGetValue(aimedMagicEffectGetter, out var selfTargetedMagicEffectGetter)) return selfTargetedMagicEffectGetter;
 
@@ -199,17 +202,34 @@ namespace ConjureNextToCaster
                 ? patchMod.MagicEffects.GetOrAddAsOverride(foundSelfTargetedMagicEffect)
                 : patchMod.MagicEffects.AddNew(aimedMagicEffectGetter.EditorID + "_Self");
 
-            selfTargetedMagicEffect.DeepCopyIn(aimedMagicEffectGetter, out var errorMask, copyMask: MagicEffectCopyMask);
-            if (errorMask.Overall is not null) throw errorMask.Overall;
+            selfTargetedMagicEffect.DeepCopyIn(aimedMagicEffectGetter, copyMask: MagicEffectCopyMask);
+
             selfTargetedMagicEffect.TargetType = TargetType.Self;
-            if (aimedMagicEffectGetter.Name?.String is not null)
-                (selfTargetedMagicEffect.Name ??= new(aimedMagicEffectGetter.Name.TargetLanguage)).String = settings.Value.SpellPrefix + aimedMagicEffectGetter.Name.String + settings.Value.SpellSuffix;
-            if (aimedMagicEffectGetter.Description?.String is not null)
-                (selfTargetedMagicEffect.Description ??= new(aimedMagicEffectGetter.Description.TargetLanguage)).String = aimedMagicEffectGetter.Description.String.Replace(settings.Value.WordsToReplaceInDescription, settings.Value.ReplacmentWordsForDescription);
+            EditName(aimedMagicEffectGetter, selfTargetedMagicEffect);
+            EditDescription(aimedMagicEffectGetter, selfTargetedMagicEffect);
 
             aimedToSelfMagicEffectGetter.Add(aimedMagicEffectGetter, selfTargetedMagicEffect);
 
             return selfTargetedMagicEffect;
+        }
+
+        internal void EditDescription(IMagicEffectGetter aimedMagicEffectGetter, IMagicEffect selfTargetedMagicEffect)
+        {
+            if (aimedMagicEffectGetter.Description?.String is not null)
+            {
+                if (settings.Value.WordsToReplaceInDescription.Length > 0)
+                    (selfTargetedMagicEffect.Description ??= new(aimedMagicEffectGetter.Description.TargetLanguage)).String = aimedMagicEffectGetter.Description.String.Replace(settings.Value.WordsToReplaceInDescription, settings.Value.ReplacmentWordsForDescription);
+            }
+            else
+                selfTargetedMagicEffect.Description = null;
+        }
+
+        internal void EditName(ITranslatedNamedGetter translatedNamedGetter, ITranslatedNamed translatedNamed)
+        {
+            if (translatedNamedGetter.Name?.String is not null)
+                (translatedNamed.Name ??= new(translatedNamedGetter.Name.TargetLanguage)).String = settings.Value.SpellPrefix + translatedNamedGetter.Name.String + settings.Value.SpellSuffix;
+            else
+                translatedNamed.Name = null;
         }
     }
 }
